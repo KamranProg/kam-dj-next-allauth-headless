@@ -10,6 +10,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from urllib.parse import urlparse
 
 import environ
 
@@ -145,12 +146,18 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 SITE_ID = 1
+# Name and domain shown in emails sent by allauth (kept in sync with the Site
+# record by core.apps after every migrate).
+SITE_NAME = env("SITE_NAME", default="dj-next")
+SITE_DOMAIN = urlparse(env("FRONTEND_URL", default="http://localhost:3000")).netloc
 
 AUTH_USER_MODEL = "accounts.User"
 
 ACCOUNT_USER_MODEL_USERNAME_FIELD = "username"
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "username", "password1*", "password2*"]
+# Users must confirm their email address (link sent by email) before they can sign in.
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 
 
 # Auth API: django-allauth headless. The "browser" client uses the session

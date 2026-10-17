@@ -1,4 +1,5 @@
 from accounts.models import User
+from allauth.account.models import EmailAddress
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
@@ -22,6 +23,12 @@ class Command(BaseCommand):
         user = User.objects.get(email=DEMO_EMAIL)
         user.set_password(DEMO_PASSWORD)
         user.save(update_fields=["password"])
+        # Email verification is mandatory, so the demo user's address must be verified.
+        EmailAddress.objects.update_or_create(
+            user=user,
+            email=DEMO_EMAIL,
+            defaults={"verified": True, "primary": True},
+        )
 
         action = "Created" if created else "Reset"
         self.stdout.write(

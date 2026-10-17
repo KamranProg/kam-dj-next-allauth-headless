@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { useAppForm } from "@/components/form";
 import { useAuth } from "@/context/auth-context";
 import type { ApiResponseStatus } from "@/types/api";
-import { errorMessages } from "@/lib/api-errors";
+import { errorMessages, isPendingEmailVerification } from "@/lib/api-errors";
 import { registerSchema, type RegisterFormBody, type RegisterFormValues } from "./schema";
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
 
@@ -29,6 +29,15 @@ async function registerViaProxy(values: RegisterFormValues): Promise<ApiResponse
     });
 
     const data = await res.json();
+
+    // Email verification is mandatory: the account exists but cannot sign in yet.
+    if (isPendingEmailVerification(data)) {
+      return {
+        status: "success",
+        message: "Almost done! Check your email to confirm your address.",
+        next: "/account/check-email",
+      };
+    }
 
     if (!res.ok) {
       return {
@@ -74,9 +83,13 @@ export function RegisterForm() {
           return;
         }
 
-        await refreshUser();
         toast.success(result.message);
         form.reset();
+        if (result.next) {
+          router.push(result.next);
+          return;
+        }
+        await refreshUser();
         router.push("/dashboard");
       });
     },

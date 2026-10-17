@@ -4,28 +4,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from accounts.models import User
-
-BROWSER = "/_allauth/browser/v1/auth"
-APP = "/_allauth/app/v1/auth"
-PASSWORD = "Str0ngPass!234"  # ruff: ignore[hardcoded-password-string]
-
-
-@pytest.fixture
-def client() -> APIClient:
-    """Return an anonymous client that enforces CSRF like a real browser."""
-    return APIClient(enforce_csrf_checks=True)
-
-
-@pytest.fixture
-def user() -> User:
-    """Return a persisted user."""
-    return User.objects.create_user(email="member@example.com", password=PASSWORD)
-
-
-def csrf_headers(client: APIClient) -> dict[str, str]:
-    """Fetch a CSRF cookie the way the frontend does and build the header."""
-    client.get(f"{BROWSER}/session")
-    return {"X-CSRFToken": client.cookies["csrftoken"].value}
+from accounts.tests.conftest import APP, BROWSER, PASSWORD, csrf_headers
 
 
 @pytest.mark.django_db
@@ -51,8 +30,11 @@ class TestBrowserAuthApi:
         )
         assert response.status_code == HTTPStatus.FORBIDDEN
 
-    def test_signup_creates_user_and_session(self, client: APIClient) -> None:
-        """Registers a user, starts a session and returns no API token."""
+    def test_signup_creates_user_but_requires_email_verification(
+        self,
+        client: APIClient,
+    ) -> None:
+        """Registers a user without a session until the email is verified."""
         response = client.post(
             f"{BROWSER}/signup",
             {"email": "new@example.com", "password": PASSWORD},
@@ -60,11 +42,13 @@ class TestBrowserAuthApi:
             headers=csrf_headers(client),
         )
         body = response.json()
-        assert response.status_code == HTTPStatus.OK
-        assert body["data"]["user"]["email"] == "new@example.com"
-        assert "session_token" not in body["meta"]
-        assert "sessionid" in response.cookies
+        pending = [f for f in body["data"]["flows"] if f["id"] == "verify_email"]
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+        assert pending
+        assert pending[0]["is_pending"] is True
         assert User.objects.filter(email="new@example.com").exists()
+        # The session cookie only holds the pending login; nobody is signed in.
+        assert client.get(f"{BROWSER}/session").status_code == HTTPStatus.UNAUTHORIZED
 
     def test_signup_rejects_weak_password(self, client: APIClient) -> None:
         """Rejects a password that fails Django's validators."""
@@ -78,20 +62,20 @@ class TestBrowserAuthApi:
         codes = {error["code"] for error in response.json()["errors"]}
         assert "password_too_short" in codes
 
-    def test_signup_rejects_duplicate_email(
+    def test_signup_with_registered_email_reveals_nothing(
         self,
         client: APIClient,
         user: User,
     ) -> None:
-        """Rejects an email that is already registered."""
+        """Answers like a normal signup so registered emails cannot be probed."""
         response = client.post(
             f"{BROWSER}/signup",
             {"email": user.email, "password": PASSWORD},
             format="json",
             headers=csrf_headers(client),
         )
-        assert response.status_code == HTTPStatus.BAD_REQUEST
-        assert response.json()["errors"][0]["code"] == "email_taken"
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+        assert User.objects.filter(email=user.email).count() == 1
 
     def test_login_starts_session(self, client: APIClient, user: User) -> None:
         """Logs in with a session cookie and returns the user."""

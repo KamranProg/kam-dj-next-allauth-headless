@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { useAppForm } from "@/components/form";
 import { useAuth } from "@/context/auth-context";
 import type { ApiResponseStatus } from "@/types/api";
-import { errorMessages } from "@/lib/api-errors";
+import { errorMessages, isPendingEmailVerification } from "@/lib/api-errors";
 import { loginSchema, type LoginFormValues } from "./schema";
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
 
@@ -24,6 +24,14 @@ async function loginViaProxy(values: LoginFormValues): Promise<ApiResponseStatus
     });
 
     const data = await res.json();
+
+    if (isPendingEmailVerification(data)) {
+      return {
+        status: "error",
+        message: "Please confirm your email address first.",
+        next: "/account/check-email",
+      };
+    }
 
     if (!res.ok) {
       return {
@@ -65,6 +73,7 @@ export function LoginForm() {
 
         if (result.status === "error") {
           toast.error(result.message);
+          if (result.next) router.push(result.next);
           return;
         }
 
@@ -96,6 +105,12 @@ export function LoginForm() {
           <form.AppField name="password">
             {(field) => <field.TextField label="Password" type="password" />}
           </form.AppField>
+
+          <div className="text-right">
+            <Link href="/account/password/reset" className="text-sm text-blue-600 hover:underline">
+              Forgot your password?
+            </Link>
+          </div>
 
           <form.AppForm>
             <form.SubmitButton isPending={isPending}>Sign in</form.SubmitButton>
