@@ -4,6 +4,8 @@ const isCI = Boolean(process.env.CI);
 
 export default defineConfig({
   testDir: "./e2e",
+  // The first visit to a page in dev mode compiles it, which can take a while.
+  timeout: 60_000,
   // Tests share one Mailpit inbox and allauth's per-IP rate limits, so run them one by one.
   workers: 1,
   fullyParallel: false,
@@ -26,6 +28,8 @@ export default defineConfig({
       command: "uv run python backend/manage.py runserver 8000 --noreload",
       cwd: "../backend",
       url: "http://localhost:8000/api/health/",
+      // Repeated runs sign in more often than allauth's rate limits allow (dev only).
+      env: { DISABLE_RATE_LIMITS: "True" },
       reuseExistingServer: !isCI,
       timeout: 60_000,
     },
