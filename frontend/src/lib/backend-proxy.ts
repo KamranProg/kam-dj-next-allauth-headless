@@ -1,7 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
-const AUTH_API = `${BACKEND_URL}/_allauth/browser/v1/auth`;
+import { AUTH_API } from "@/lib/backend-url";
 
 type ForwardOptions = {
   /** Path under the allauth browser auth API, e.g. "login". */
