@@ -28,3 +28,9 @@ export function isPendingEmailVerification(data: unknown): boolean {
 export function isPendingMfa(data: unknown): boolean {
   return hasPendingFlow(data, "mfa_authenticate");
 }
+
+/** Message for a failed call; a 429 means the address is making too many requests. */
+export function responseMessage(status: number, data: unknown, fallback: string): string {
+  if (status === 429) return "Too many attempts. Please wait a minute and try again.";
+  return errorMessages(data, fallback);
+}

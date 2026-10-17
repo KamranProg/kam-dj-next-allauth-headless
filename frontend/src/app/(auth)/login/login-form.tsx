@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { useAppForm } from "@/components/form";
 import { useAuth } from "@/context/auth-context";
 import type { ApiResponseStatus } from "@/types/api";
-import { errorMessages, isPendingEmailVerification, isPendingMfa } from "@/lib/api-errors";
+import { isPendingEmailVerification, isPendingMfa, responseMessage } from "@/lib/api-errors";
 import { loginSchema, type LoginFormValues } from "./schema";
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
 
@@ -45,7 +45,7 @@ async function loginViaProxy(values: LoginFormValues): Promise<ApiResponseStatus
     if (!res.ok) {
       return {
         status: "error",
-        message: errorMessages(data, "Login failed"),
+        message: responseMessage(res.status, data, "Login failed"),
       };
     }
 

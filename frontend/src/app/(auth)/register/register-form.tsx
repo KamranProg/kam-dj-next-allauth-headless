@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { useAppForm } from "@/components/form";
 import { useAuth } from "@/context/auth-context";
 import type { ApiResponseStatus } from "@/types/api";
-import { errorMessages, isPendingEmailVerification } from "@/lib/api-errors";
+import { isPendingEmailVerification, responseMessage } from "@/lib/api-errors";
 import { registerSchema, type RegisterFormBody, type RegisterFormValues } from "./schema";
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
 
@@ -42,7 +42,7 @@ async function registerViaProxy(values: RegisterFormValues): Promise<ApiResponse
     if (!res.ok) {
       return {
         status: "error",
-        message: errorMessages(data, "Registration failed"),
+        message: responseMessage(res.status, data, "Registration failed"),
       };
     }
 

@@ -1,4 +1,4 @@
-import { errorMessages } from "@/lib/api-errors";
+import { responseMessage } from "@/lib/api-errors";
 
 export type AuthCallResult = {
   ok: boolean;
@@ -22,7 +22,9 @@ export async function postAuth(
     const data = await res.json().catch(() => ({}));
     return {
       ok: res.ok,
-      message: res.ok ? "" : errorMessages(data, "Something went wrong. Please try again."),
+      message: res.ok
+        ? ""
+        : responseMessage(res.status, data, "Something went wrong. Please try again."),
       data,
     };
   } catch {
@@ -49,7 +51,9 @@ export async function callProxy(
     return {
       status: res.status,
       ok: res.ok,
-      message: res.ok ? "" : errorMessages(data, "Something went wrong. Please try again."),
+      message: res.ok
+        ? ""
+        : responseMessage(res.status, data, "Something went wrong. Please try again."),
       data,
     };
   } catch {

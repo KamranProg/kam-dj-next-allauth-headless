@@ -116,6 +116,56 @@ class TestBrowserAuthApi:
 
 
 @pytest.mark.django_db
+class TestRateLimiting:
+    """Tests for allauth's built-in rate limits."""
+
+    def test_repeated_failed_logins_lock_the_account_for_a_while(
+        self,
+        client: APIClient,
+        user: User,
+    ) -> None:
+        """Refuses further attempts for an email after too many failures."""
+        codes = []
+        for _ in range(7):
+            response = client.post(
+                f"{BROWSER}/login",
+                {"email": user.email, "password": "wrong"},
+                format="json",
+                headers=csrf_headers(client),
+            )
+            codes.append(response.json()["errors"][0]["code"])
+
+        assert codes[0] == "email_password_mismatch"
+        assert codes[-1] == "too_many_login_attempts"
+
+        # Even the right password is refused while the lock is active.
+        correct = client.post(
+            f"{BROWSER}/login",
+            {"email": user.email, "password": PASSWORD},
+            format="json",
+            headers=csrf_headers(client),
+        )
+        assert correct.status_code == HTTPStatus.BAD_REQUEST
+        assert correct.json()["errors"][0]["code"] == "too_many_login_attempts"
+        assert "sessionid" not in correct.cookies
+
+    def test_too_many_requests_from_one_address_get_429(
+        self, client: APIClient
+    ) -> None:
+        """Answers 429 once an address makes more login requests than allowed."""
+        statuses = {
+            client.post(
+                f"{BROWSER}/login",
+                {"email": f"user{n}@example.com", "password": "wrong"},
+                format="json",
+                headers=csrf_headers(client),
+            ).status_code
+            for n in range(40)
+        }
+        assert HTTPStatus.TOO_MANY_REQUESTS in statuses
+
+
+@pytest.mark.django_db
 class TestAppAuthApi:
     """Tests for the token-based (mobile app) authentication endpoints."""
 

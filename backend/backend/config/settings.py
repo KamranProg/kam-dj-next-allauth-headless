@@ -189,6 +189,10 @@ MFA_TOTP_TOLERANCE = 1
 # proxies in front of Django so the real client IP is read from
 # X-Forwarded-For. Use a shared cache (e.g. Redis) when running several workers.
 ALLAUTH_TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=0)
+# Lets repeated end-to-end test runs sign in more often than a person would.
+# Only honoured when DEBUG is on, so it cannot switch the limits off in production.
+if DEBUG and env.bool("DISABLE_RATE_LIMITS", default=False):
+    ACCOUNT_RATE_LIMITS = False
 
 # Outgoing email. In development this points at Mailpit (docker-compose.yml);
 # set the EMAIL_* variables to a real SMTP provider in production.
