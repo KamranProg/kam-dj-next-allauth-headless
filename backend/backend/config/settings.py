@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
+    "allauth.mfa",
     "allauth.headless",
     "rest_framework",
     # Swagger UI
@@ -176,6 +177,12 @@ HEADLESS_FRONTEND_URLS = {
     "account_reset_password_from_key": f"{FRONTEND_URL}/account/password/reset/key/{{key}}",
     "account_signup": f"{FRONTEND_URL}/register",
 }
+
+# Multi-factor authentication: authenticator-app codes (TOTP) with recovery codes.
+MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]
+MFA_TOTP_ISSUER = SITE_NAME
+# Accept the code from the previous/next 30 s window to tolerate small clock drift.
+MFA_TOTP_TOLERANCE = 1
 
 # allauth rate-limits login, signup and password reset per client IP. Behind
 # reverse proxies (including the Next.js server) set this to the number of

@@ -2,7 +2,19 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { AUTH_API } from "@/lib/backend-url";
 
-const PUBLIC_PATHS = ["/", "/about", "/login", "/register", "/account", "/api"];
+// Pages reachable without a session. Everything else, including /account/security,
+// requires one.
+const PUBLIC_PATHS = [
+  "/",
+  "/about",
+  "/login",
+  "/register",
+  "/account/check-email",
+  "/account/verify-email",
+  "/account/password",
+  "/account/two-factor",
+  "/api",
+];
 const AUTH_ONLY_PATHS = ["/login", "/register"];
 
 const matches = (pathname: string, paths: string[]) =>

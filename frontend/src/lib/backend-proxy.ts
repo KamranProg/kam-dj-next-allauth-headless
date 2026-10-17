@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_API } from "@/lib/backend-url";
+import { AUTH_API, BROWSER_API } from "@/lib/backend-url";
 
 type ForwardOptions = {
-  /** Path under the allauth browser auth API, e.g. "login". */
+  /** Path under the allauth browser API, e.g. "auth/login" or "account/authenticators". */
   path: string;
-  method?: "POST" | "DELETE";
+  method?: "GET" | "POST" | "DELETE";
   /** Upstream statuses that mean success but should reach the browser as 200. */
   successAs200?: number[];
 };
@@ -37,7 +37,7 @@ export async function forwardToBackend(
   let csrfToken = req.cookies.get("csrftoken")?.value ?? "";
   const bootstrapCookies: string[] = [];
 
-  if (!csrfToken) {
+  if (!csrfToken && method !== "GET") {
     const bootstrap = await fetch(`${AUTH_API}/session`, {
       cache: "no-store",
       headers: {
@@ -50,7 +50,7 @@ export async function forwardToBackend(
     cookieHeader = [incomingCookies, `csrftoken=${csrfToken}`].filter(Boolean).join("; ");
   }
 
-  const upstream = await fetch(`${AUTH_API}/${path}`, {
+  const upstream = await fetch(`${BROWSER_API}/${path}`, {
     method,
     cache: "no-store",
     headers: {
@@ -60,7 +60,7 @@ export async function forwardToBackend(
       Origin: origin,
       ...(forwardedFor && { "X-Forwarded-For": forwardedFor }),
     },
-    body: method === "DELETE" ? undefined : await req.text(),
+    body: method === "POST" ? await req.text() : undefined,
   });
 
   const data = await upstream.json().catch(() => ({}));

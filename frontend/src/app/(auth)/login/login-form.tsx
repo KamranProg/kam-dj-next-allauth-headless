@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { useAppForm } from "@/components/form";
 import { useAuth } from "@/context/auth-context";
 import type { ApiResponseStatus } from "@/types/api";
-import { errorMessages, isPendingEmailVerification } from "@/lib/api-errors";
+import { errorMessages, isPendingEmailVerification, isPendingMfa } from "@/lib/api-errors";
 import { loginSchema, type LoginFormValues } from "./schema";
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
 
@@ -30,6 +30,15 @@ async function loginViaProxy(values: LoginFormValues): Promise<ApiResponseStatus
         status: "error",
         message: "Please confirm your email address first.",
         next: "/account/check-email",
+      };
+    }
+
+    // The password was right, but a second factor is still needed.
+    if (isPendingMfa(data)) {
+      return {
+        status: "error",
+        message: "Enter your authentication code to finish signing in.",
+        next: "/account/two-factor",
       };
     }
 

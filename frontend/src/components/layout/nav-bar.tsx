@@ -22,9 +22,14 @@ export function NavBar() {
             About
           </Link>
           {isLoggedIn && (
-            <Link href="/dashboard" className="hover:underline">
-              Dashboard
-            </Link>
+            <>
+              <Link href="/dashboard" className="hover:underline">
+                Dashboard
+              </Link>
+              <Link href="/account/security" className="hover:underline">
+                Security
+              </Link>
+            </>
           )}
         </nav>
       </div>
