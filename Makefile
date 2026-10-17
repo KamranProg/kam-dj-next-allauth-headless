@@ -2,10 +2,10 @@ BACKEND_ENV := backend/backend/.env
 COMPOSE := docker compose --env-file $(BACKEND_ENV)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup deps env-check db migrate seed dev backend frontend test check lint down reset-db
+.PHONY: help setup deps env-check db migrate seed dev backend frontend test e2e check lint down reset-db
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
 
 setup: $(BACKEND_ENV) env-check deps ## Create the backend .env and install both apps' dependencies
 
@@ -47,6 +47,9 @@ frontend: ## Run only the Next.js app on :3000
 
 test: db ## Run the backend tests
 	cd backend && uv run pytest backend --ds=config.settings -q
+
+e2e: db migrate ## Run the browser end-to-end tests (starts the API and web app if needed)
+	cd frontend && pnpm e2e
 
 lint: ## Lint and type-check both apps
 	cd backend && uv run ruff check backend --no-fix && uv run ruff format backend --check && uv run mypy backend
