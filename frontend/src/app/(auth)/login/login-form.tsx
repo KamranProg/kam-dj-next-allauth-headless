@@ -8,14 +8,11 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { useAppForm } from "@/components/form";
 import { useAuth } from "@/context/auth-context";
 import type { ApiResponseStatus } from "@/types/api";
-import { loginSchema, type LoginFormBody, type LoginFormValues } from "./schema";
+import { errorMessages } from "@/lib/api-errors";
+import { loginSchema, type LoginFormValues } from "./schema";
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
 
 async function loginViaProxy(values: LoginFormValues): Promise<ApiResponseStatus> {
-  const formBody: LoginFormBody = {
-    ...values,
-    username: values.email,
-  };
   try {
     const res = await fetch("/api/proxy/auth/login", {
       method: "POST",
@@ -23,7 +20,7 @@ async function loginViaProxy(values: LoginFormValues): Promise<ApiResponseStatus
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(formBody),
+      body: JSON.stringify(values),
     });
 
     const data = await res.json();
@@ -31,13 +28,13 @@ async function loginViaProxy(values: LoginFormValues): Promise<ApiResponseStatus
     if (!res.ok) {
       return {
         status: "error",
-        message: data.message || "Login failed",
+        message: errorMessages(data, "Login failed"),
       };
     }
 
     return {
       status: "success",
-      message: data.message || "Logged in successfully!",
+      message: "Logged in successfully!",
     };
   } catch (error) {
     console.error("Login error:", error);

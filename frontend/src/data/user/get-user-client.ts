@@ -1,17 +1,23 @@
-export async function getUserClient(): Promise<{
+export type SessionUser = {
   id: string;
   email: string;
   username?: string;
-} | null> {
+};
+
+export async function getUserClient(): Promise<SessionUser | null> {
   try {
-    // Same-origin request; next.config.ts rewrites it to the Django API.
+    // Same-origin request; next.config.ts rewrites it to the allauth session
+    // endpoint, which answers 401 when nobody is signed in.
     // A timeout keeps the nav bar from waiting forever if the API is slow or down.
-    const res = await fetch("/api/auth/user", {
+    const res = await fetch("/api/auth/session", {
       credentials: "include",
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
-    return await res.json();
+
+    const user = (await res.json())?.data?.user;
+    if (!user) return null;
+    return { id: String(user.id), email: user.email, username: user.username };
   } catch {
     return null;
   }

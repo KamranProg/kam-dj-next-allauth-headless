@@ -10,8 +10,8 @@ const nextConfig: NextConfig = {
       {
         // Read-only call made from the browser. Writes go through /api/proxy/*
         // because they need the HttpOnly CSRF cookie.
-        source: "/api/auth/user",
-        destination: `${BACKEND_URL}/api/auth/user/`,
+        source: "/api/auth/session",
+        destination: `${BACKEND_URL}/_allauth/browser/v1/auth/session`,
       },
     ];
   },

@@ -238,16 +238,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dj-rest-auth"
-version = "7.2.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-    { name = "djangorestframework" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/14/fd/c8a185a98f6860b802dc5e663c652efc01cd68f4e046c65f8cb9328c0077/dj_rest_auth-7.2.0.tar.gz", hash = "sha256:f77af37da5cf6ee28f03f283a378a2f5761860e72d1d6f2fa3d50e6286000482", size = 490126, upload-time = "2026-03-15T04:05:39.272Z" }
-
-[[package]]
 name = "django"
 version = "6.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -272,6 +262,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c4/33/7c8f8fc85f4ee644ee3acb20c1fe4d04516298ab5903f812e1556b65f947/django_allauth-65.19.7.tar.gz", hash = "sha256:c7749551b659ca954e483f6f634cd0c262d65dd8144f5219b3a31cba0426e981", size = 2296178, upload-time = "2026-10-01T12:35:24.152Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/30/c4/a42cc4439b18b8d2767f8c54999e011b9f620a478806ed265baed7c3dc01/django_allauth-65.19.7-py3-none-any.whl", hash = "sha256:8899377f38afabf10445c9ee2f808a730304ca8aecc540657d51a8b3928283d6", size = 2076429, upload-time = "2026-10-01T12:35:20.844Z" },
+]
+
+[package.optional-dependencies]
+headless-spec = [
+    { name = "pyyaml" },
 ]
 
 [[package]]
@@ -442,9 +437,8 @@ name = "k-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "dj-rest-auth" },
     { name = "django" },
-    { name = "django-allauth" },
+    { name = "django-allauth", extra = ["headless-spec"] },
     { name = "django-environ" },
     { name = "djangorestframework" },
     { name = "drf-spectacular", extra = ["sidecar"] },
@@ -466,9 +460,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dj-rest-auth", specifier = ">=7.0.1" },
     { name = "django", specifier = ">=6.0,<7.0" },
-    { name = "django-allauth", specifier = ">=65.8" },
+    { name = "django-allauth", extras = ["headless-spec"], specifier = ">=65.8" },
     { name = "django-environ", specifier = ">=0.12" },
     { name = "djangorestframework", specifier = ">=3.16" },
     { name = "drf-spectacular", extras = ["sidecar"], specifier = ">=0.28" },

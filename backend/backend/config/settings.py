@@ -49,10 +49,8 @@ INSTALLED_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
-    # REST auth
+    "allauth.headless",
     "rest_framework",
-    "dj_rest_auth",
-    "dj_rest_auth.registration",
     # Swagger UI
     "drf_spectacular",
     "drf_spectacular_sidecar",
@@ -155,13 +153,28 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "username", "password1*", "password2*"]
 
 
-# Session-cookie authentication only: no API tokens are issued or returned.
-REST_AUTH = {
-    "SESSION_LOGIN": True,
-    "USE_JWT": False,
-    "TOKEN_MODEL": None,
-    "TOKEN_SERIALIZER": "accounts.serializers.NoTokenSerializer",
+# Auth API: django-allauth headless. The "browser" client uses the session
+# cookie plus CSRF (the Next.js app); the "app" client returns a session token
+# for mobile apps, sent as the X-Session-Token header. Nothing is issued to
+# browsers other than cookies.
+HEADLESS_ONLY = True
+HEADLESS_CLIENTS = ("browser", "app")
+HEADLESS_SERVE_SPECIFICATION = True
+
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
+# Where links in verification and password-reset emails point.
+HEADLESS_FRONTEND_URLS = {
+    "account_confirm_email": f"{FRONTEND_URL}/account/verify-email/{{key}}",
+    "account_reset_password": f"{FRONTEND_URL}/account/password/reset",
+    "account_reset_password_from_key": f"{FRONTEND_URL}/account/password/reset/key/{{key}}",
+    "account_signup": f"{FRONTEND_URL}/register",
 }
+
+# allauth rate-limits login, signup and password reset per client IP. Behind
+# reverse proxies (including the Next.js server) set this to the number of
+# proxies in front of Django so the real client IP is read from
+# X-Forwarded-For. Use a shared cache (e.g. Redis) when running several workers.
+ALLAUTH_TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=0)
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
@@ -194,6 +207,7 @@ ADMIN_URL = env("ADMIN_URL", default="admin/")
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
+        "allauth.headless.contrib.rest_framework.authentication.XSessionTokenAuthentication",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }

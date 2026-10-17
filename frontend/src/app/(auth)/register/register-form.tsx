@@ -8,13 +8,14 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { useAppForm } from "@/components/form";
 import { useAuth } from "@/context/auth-context";
 import type { ApiResponseStatus } from "@/types/api";
+import { errorMessages } from "@/lib/api-errors";
 import { registerSchema, type RegisterFormBody, type RegisterFormValues } from "./schema";
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
 
 async function registerViaProxy(values: RegisterFormValues): Promise<ApiResponseStatus> {
   const body: RegisterFormBody = {
-    ...values,
-    username: values.email,
+    email: values.email,
+    password: values.password1,
   };
 
   try {
@@ -30,13 +31,9 @@ async function registerViaProxy(values: RegisterFormValues): Promise<ApiResponse
     const data = await res.json();
 
     if (!res.ok) {
-      const errors = Object.entries(data)
-        .map(([key, val]) => `${key}: ${(val as string[]).join(", ")}`)
-        .join("\n");
-
       return {
         status: "error",
-        message: errors || "Registration failed",
+        message: errorMessages(data, "Registration failed"),
       };
     }
 

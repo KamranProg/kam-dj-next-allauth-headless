@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from django.urls import include, path
+from django.urls import path
 from drf_spectacular.utils import extend_schema, inline_serializer
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -13,8 +13,6 @@ from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
-from .views import get_csrf_token
 
 
 @extend_schema(
@@ -33,12 +31,14 @@ class HealthCheckView(APIView):
 
 urlpatterns = [
     path("health/", HealthCheckView.as_view(), name="health"),
-    path("auth/", include("dj_rest_auth.urls")),
-    path("auth/registration/", include("dj_rest_auth.registration.urls")),
-    # CSRF token endpoint
-    path("auth/csrf/", get_csrf_token, name="get_csrf_token"),
     # Schema + Swagger UI
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    # Authentication API (django-allauth headless) has its own OpenAPI spec.
+    path(
+        "docs/auth/",
+        SpectacularSwaggerView.as_view(url="/_allauth/openapi.json"),
+        name="swagger-ui-auth",
+    ),
     path("redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
 ]

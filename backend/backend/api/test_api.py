@@ -15,12 +15,6 @@ class TestApiBasics:
         assert response.status_code == HTTPStatus.OK
         assert response.json() == {"status": "ok"}
 
-    def test_csrf_endpoint_sets_cookie(self) -> None:
-        """Sets the CSRF cookie."""
-        response = APIClient().get("/api/auth/csrf/")
-        assert response.status_code == HTTPStatus.OK
-        assert "csrftoken" in response.cookies
-
     def test_openapi_schema_generates_without_errors(self) -> None:
         """Generates the OpenAPI schema with no warnings or errors."""
         call_command(
