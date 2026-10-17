@@ -21,7 +21,7 @@ Then open <http://localhost:3000> and sign in with the demo account:
 |---|---|
 | `demo@example.com` | `DemoPass123!` |
 
-The API is at <http://localhost:8000> and its interactive docs at <http://localhost:8000/api/docs/>. Run `make help` to list every command.
+The API is at <http://localhost:8000>, with interactive docs at <http://localhost:8000/api/docs/> and for the authentication endpoints at <http://localhost:8000/api/docs/auth/>. Run `make help` to list every command.
 
 ## Troubleshooting
 
@@ -47,7 +47,7 @@ It is an early-stage foundation, not a finished product. There are no domain fea
 | Area | Technology | Role |
 |---|---|---|
 | Backend | Django 6.1, Django REST Framework | API and user model |
-| Backend | dj-rest-auth, django-allauth | Login, logout, registration, password endpoints |
+| Backend | django-allauth (headless API) | Registration, login, logout, sessions, password reset, rate limiting, social login and MFA support |
 | Backend | drf-spectacular | OpenAPI schema, Swagger UI and ReDoc |
 | Backend | PostgreSQL 17 (Docker Compose) | Database |
 | Backend | uv, [rav](https://pypi.org/project/rav/) | Dependencies and project task runner |
@@ -63,11 +63,12 @@ Implemented:
 
 - Email-based registration, login and logout.
 - Session cookie authentication with CSRF protection (`HttpOnly`, `SameSite=Lax` cookies; `Secure` outside development).
-- No API tokens: login and registration return no credentials in the response body.
+- No API tokens for the web app: login and signup answer with the user and set cookies only. Mobile apps get a session token through the separate `app` client (see [Mobile apps](#mobile-apps)).
+- Built-in rate limiting from allauth: login, signup and password reset are limited per client IP, and failed logins per account.
 - Custom `User` model with a UUID primary key and email as the login field.
 - Next.js proxy routes (`/api/proxy/auth/*`) that forward auth requests to Django, adding the CSRF header from the `HttpOnly` cookie and passing every cookie back to the browser.
 - Route protection in the Next.js proxy (`src/proxy.ts`): `/dashboard` requires a session cookie, and signed-in users are redirected away from `/login` and `/register`.
-- Client-side auth context that loads the current user from `/api/auth/user`, which Next.js rewrites to Django (same origin, no CORS).
+- Client-side auth context that loads the current user from `/api/auth/session`, which Next.js rewrites to Django (same origin, no CORS).
 - Form validation with Zod, including password strength rules on registration.
 - Health check endpoint, OpenAPI schema, Swagger UI and ReDoc.
 - Django admin for the custom user model.
@@ -76,7 +77,7 @@ Implemented:
 Present in the code but not usable yet:
 
 - Social login: the Google and Facebook buttons are placeholders that show an alert.
-- Password reset, password change and email verification endpoints come with dj-rest-auth and are exposed by the API, but the frontend has no pages for them. Email is written to the console only.
+- Password reset, password change, email verification and MFA endpoints come with django-allauth's headless API and are exposed, but the frontend has no pages for them. Email is written to the console only.
 - A `UserProfile` model (avatar, bio) exists but is not exposed through the API.
 
 ## Architecture
@@ -89,12 +90,13 @@ flowchart LR
         Pages["Pages and forms<br/>login, register, dashboard"]
         Guard["Proxy guard<br/>session cookie check"]
         Routes["Proxy routes<br/>/api/proxy/auth/*"]
-        Rewrite["Rewrite<br/>/api/auth/user"]
+        Rewrite["Rewrite<br/>/api/auth/session"]
     end
 
     subgraph BE["backend (Django REST, :8000)"]
-        API["REST API<br/>/api/auth/*, /api/health/"]
-        Docs["OpenAPI docs<br/>/api/docs/, /api/redoc/"]
+        API["Auth API (allauth headless)<br/>/_allauth/browser/v1/*"]
+        Health["Health check<br/>/api/health/"]
+        Docs["OpenAPI docs<br/>/api/docs/, /api/docs/auth/"]
         Admin["Django admin<br/>/admin/"]
     end
 
@@ -112,9 +114,18 @@ flowchart LR
 How a login works:
 
 1. The browser submits the login form to `/api/proxy/auth/login` on the Next.js server.
-2. The proxy route calls `POST /api/auth/login/` on Django, copying the `csrftoken` cookie into the `X-CSRFToken` header (client code cannot read it because it is `HttpOnly`) and forwarding the `Origin` header.
+2. The proxy route calls `POST /_allauth/browser/v1/auth/login` on Django, copying the `csrftoken` cookie into the `X-CSRFToken` header (client code cannot read it because it is `HttpOnly`; if the browser has none yet, the proxy fetches one first) and forwarding the `Origin` and `X-Forwarded-For` headers.
 3. Django authenticates the user and replies with `sessionid` and `csrftoken` cookies, which the proxy route passes on to the browser.
-4. The proxy guard sees the `sessionid` cookie and allows access to `/dashboard`. The client then calls `/api/auth/user` (rewritten to Django) to load the user for the navigation bar.
+4. The proxy guard sees the `sessionid` cookie and allows access to `/dashboard`. The client then calls `/api/auth/session` (rewritten to Django) to load the user for the navigation bar. That endpoint answers `401` while nobody is signed in.
+
+## Mobile apps
+
+The same backend serves native clients such as an Expo app. django-allauth's headless API has two client types under `/_allauth/`:
+
+- `browser`: session cookie plus CSRF. The Next.js app uses this one.
+- `app`: no cookies and no CSRF. `POST /_allauth/app/v1/auth/login` returns a `session_token`, which the app stores securely and sends as the `X-Session-Token` header; `DELETE .../auth/session` revokes it. DRF views accept that header too (`XSessionTokenAuthentication` is enabled).
+
+This flow is covered by the backend tests. No mobile client exists in this repository yet, and it has not been tried from a real Expo build. Social sign-in from native SDKs would use allauth's provider-token endpoint, which is not configured here.
 
 ## Project structure
 
@@ -196,7 +207,9 @@ The frontend needs no `.env.local` for local development: it defaults to the API
 | `ALLOWED_HOSTS` | Comma-separated host names. |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Database credentials. Required. Also used by `docker-compose.yml`. |
 | `POSTGRES_HOST`, `POSTGRES_PORT` | Database address. Required. The example uses port 5433 to avoid clashing with a PostgreSQL already on 5432. |
-| `CSRF_TRUSTED_ORIGINS` | Origin(s) the frontend is served from. Defaults to `http://localhost:3000`. |
+| `FRONTEND_URL` | Where the frontend is served from. Used for links in verification and reset emails and as the default CSRF trusted origin. Defaults to `http://localhost:3000`. |
+| `CSRF_TRUSTED_ORIGINS` | Extra origins allowed by Django's CSRF check (comma-separated). |
+| `TRUSTED_PROXY_COUNT` | Number of reverse proxies in front of Django (the Next.js server counts as one), so rate limits use the real client IP. Defaults to 0. |
 | `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`, `SECURE_SSL_REDIRECT` | Default to on when `DEBUG` is off. |
 | `SECURE_HSTS_SECONDS` | Defaults to 3600 when `DEBUG` is off. Raise it once HTTPS works. |
 | `USE_X_FORWARDED_PROTO` | Set to `True` behind a TLS-terminating reverse proxy. |
@@ -242,7 +255,7 @@ The frontend needs no `.env.local` for local development: it defaults to the API
 make check
 ```
 
-This runs Ruff, mypy, the backend test suite (23 tests: user model, service functions, admin, auth endpoints, health/CSRF endpoints, OpenAPI schema generation, management commands), ESLint, Prettier and the TypeScript compiler.
+This runs Ruff, mypy, the backend test suite (26 tests: user model, service functions, admin, browser and app authentication endpoints including CSRF enforcement, health endpoint, OpenAPI schema generation, management commands), ESLint, Prettier and the TypeScript compiler.
 
 The frontend has no automated tests.
 
@@ -260,9 +273,9 @@ In place:
 
 Not yet in place:
 
-- **Rate limiting.** Login and registration are not throttled. Doing this correctly behind the Next.js proxy requires forwarding client IPs (`X-Forwarded-For`) and configuring DRF's `NUM_PROXIES`, so it is left as a follow-up.
+- **Rate-limit configuration for production.** allauth limits login, signup and password reset per IP, but behind the Next.js server and any load balancer you must set `TRUSTED_PROXY_COUNT` so the real client IP is used, and use a shared cache (for example Redis) when running several workers. The default in-memory cache counts per process.
 - Email verification and password reset flows are not wired up in the UI.
-- The Swagger and ReDoc pages are public. Restrict them in production if the API surface should not be advertised.
+- The Swagger and ReDoc pages (`/api/docs/`, `/api/docs/auth/`, `/api/redoc/`) are public. Restrict them in production if the API surface should not be advertised.
 
 ## Project status
 
