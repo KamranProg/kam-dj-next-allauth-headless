@@ -176,7 +176,21 @@ HEADLESS_FRONTEND_URLS = {
 # X-Forwarded-For. Use a shared cache (e.g. Redis) when running several workers.
 ALLAUTH_TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=0)
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# Outgoing email. In development this points at Mailpit (docker-compose.yml);
+# set the EMAIL_* variables to a real SMTP provider in production.
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="dj-next <noreply@localhost>")
+MAILERS = {
+    "default": {
+        "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+        "OPTIONS": {
+            "host": env("EMAIL_HOST", default="127.0.0.1"),
+            "port": env.int("EMAIL_PORT", default=1025),
+            "username": env("EMAIL_HOST_USER", default=""),
+            "password": env("EMAIL_HOST_PASSWORD", default=""),
+            "use_tls": env.bool("EMAIL_USE_TLS", default=False),
+        },
+    },
+}
 
 # Enable secure cookie behavior
 SESSION_COOKIE_HTTPONLY = True

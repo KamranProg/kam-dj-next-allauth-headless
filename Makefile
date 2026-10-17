@@ -27,8 +27,8 @@ env-check:
 		echo ""; \
 	fi
 
-db: env-check ## Start PostgreSQL in Docker and wait until it is ready
-	$(COMPOSE) up -d --wait db
+db: env-check ## Start PostgreSQL and Mailpit (dev inbox, :8025) in Docker and wait until ready
+	$(COMPOSE) up -d --wait db mailpit
 
 migrate: ## Apply database migrations
 	cd backend && uv run python backend/manage.py migrate
@@ -54,7 +54,7 @@ lint: ## Lint and type-check both apps
 
 check: lint test ## Everything CI runs, plus the backend tests
 
-down: ## Stop the database container (data is kept)
+down: ## Stop the Docker services (database data is kept)
 	$(COMPOSE) down
 
 reset-db: ## Delete the database volume and start a fresh database
