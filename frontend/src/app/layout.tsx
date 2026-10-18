@@ -23,7 +23,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      {/* Browser extensions (ColorZilla, Grammarly, ...) add attributes to <body> before React
+          hydrates. suppressHydrationWarning ignores that attribute mismatch on this element only. */}
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
+      >
         <AuthProvider>
           <NavBar />
           {children}
