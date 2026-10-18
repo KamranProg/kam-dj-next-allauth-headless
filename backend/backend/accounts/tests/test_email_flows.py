@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import unquote
 
 import pytest
+from allauth.account.models import EmailAddress
 from django.core import mail
 from rest_framework.test import APIClient
 
@@ -122,3 +123,61 @@ class TestPasswordReset:
         key = link_key(r"reset/key/(\S+)")
         response = api_post("password/reset", {"key": key, "password": "123"})
         assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+@pytest.mark.django_db
+class TestGoogleOnlyAccount:
+    """An account created through Google sign-in has no password until it sets one."""
+
+    @pytest.fixture
+    def google_user(self) -> User:
+        """Return a verified user with no usable password, as Google sign-up creates."""
+        member = User.objects.create_user(email="gina@example.com", password=None)
+        member.set_unusable_password()
+        member.save()
+        EmailAddress.objects.create(
+            user=member,
+            email=member.email,
+            verified=True,
+            primary=True,
+        )
+        return member
+
+    def test_password_login_fails_until_a_password_is_set(
+        self,
+        google_user: User,
+        api_post: Callable[..., Any],
+    ) -> None:
+        """Refuses a password login for an account that never had a password."""
+        response = api_post("login", {"email": google_user.email, "password": PASSWORD})
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_resetting_the_password_lets_the_account_use_one(
+        self,
+        google_user: User,
+        api_post: Callable[..., Any],
+    ) -> None:
+        """Sets a first password through the reset link, then signs in with it."""
+        api_post("password/request", {"email": google_user.email})
+        assert "/account/password/reset/key/" in str(mail.outbox[-1].body)
+        key = link_key(r"reset/key/(\S+)")
+
+        api_post("password/reset", {"key": key, "password": NEW_PASSWORD})
+
+        response = api_post(
+            "login", {"email": google_user.email, "password": NEW_PASSWORD}
+        )
+        assert response.status_code == HTTPStatus.OK
+
+    def test_signing_up_again_sends_the_account_exists_email(
+        self,
+        google_user: User,
+        api_post: Callable[..., Any],
+    ) -> None:
+        """Answers like a new signup but emails the owner a way to recover the account."""
+        response = api_post(
+            "signup", {"email": google_user.email, "password": PASSWORD}
+        )
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+        assert "already exists" in str(mail.outbox[-1].body)
+        assert "/account/password/reset" in str(mail.outbox[-1].body)
