@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "allauth.mfa",
+    "allauth.socialaccount.providers.google",
     "allauth.headless",
     "rest_framework",
     # Swagger UI
@@ -60,6 +61,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "accounts.middleware.TrustedProxyMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -176,7 +178,34 @@ HEADLESS_FRONTEND_URLS = {
     "account_reset_password": f"{FRONTEND_URL}/account/password/reset",
     "account_reset_password_from_key": f"{FRONTEND_URL}/account/password/reset/key/{{key}}",
     "account_signup": f"{FRONTEND_URL}/register",
+    # Where a failed social sign-in lands (the page shows the error code).
+    "socialaccount_login_error": f"{FRONTEND_URL}/account/social/done",
 }
+
+# Google sign-in. The client ID and secret come from the environment (Google
+# Cloud Console > Credentials); they are never committed.
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APPS": [
+            {
+                "client_id": env("GOOGLE_CLIENT_ID", default=""),
+                "secret": env("GOOGLE_CLIENT_SECRET", default=""),
+                "key": "",
+            }
+        ],
+        "SCOPE": ["openid", "email", "profile"],
+        "AUTH_PARAMS": {"prompt": "select_account"},
+    }
+}
+# Account linking: a Google sign-in is matched to an existing account by email
+# only when both addresses are verified (see accounts.adapters). Matched accounts
+# are connected automatically; new accounts are created from the verified email.
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+SOCIALACCOUNT_ADAPTER = "accounts.adapters.SocialAccountAdapter"
+# Shared with the Next.js server (PROXY_SHARED_SECRET in frontend/.env.local). Lets
+# Next.js report the public host so OAuth callback URLs are built correctly.
+PROXY_SHARED_SECRET = env("PROXY_SHARED_SECRET", default="")
 
 # Multi-factor authentication: authenticator-app codes (TOTP) with recovery codes.
 MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]

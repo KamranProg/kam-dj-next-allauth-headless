@@ -24,4 +24,5 @@ urlpatterns = [
     path(settings.ADMIN_URL, admin.site.urls),
     path("api/", include("api.urls")),
     path("_allauth/", include("allauth.headless.urls")),
+    path("accounts/", include("allauth.socialaccount.providers.google.urls")),
 ]
