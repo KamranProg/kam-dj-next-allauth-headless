@@ -38,6 +38,8 @@ make dev
 
 The template uses `127.0.0.1` and port 5433 on purpose: `localhost` can resolve to IPv6 first and reach a different server than the container.
 
+**I signed up with Google and cannot sign in (or sign up) with a password.** An account created through Google has no password, so a password sign-in is rejected. Signing up again with the same address gives the same "Check your email" page as any new sign-up (so addresses cannot be probed) and emails the owner an "account already exists" message with a recovery link. To use a password as well, choose **Forgot your password?** on the sign-in page and set one; Google sign-in keeps working. (The "account already exists" email is rate-limited per address, so a second one within a few minutes is not sent.)
+
 **`Error 400: redirect_uri_mismatch` from Google.** Google received a callback address other than the registered one, usually because the app was opened on another port (for example `localhost:3001`, when something else held port 3000). Stop whatever uses port 3000 and open `http://localhost:3000`. If you serve the app from another address, register `<that address>/accounts/google/login/callback/` in the OAuth client.
 
 ## Overview
@@ -288,7 +290,7 @@ The frontend needs no `.env.local` for local development: it defaults to the API
 make check
 ```
 
-This runs Ruff, mypy, the backend test suite (54 tests: user model, service functions, admin, browser and app authentication endpoints including CSRF enforcement, email verification, password reset, two-factor authentication with recovery codes and reauthentication, rate limiting, account linking for Google sign-in, the forwarded-host check, health endpoint, OpenAPI schema generation, management commands), ESLint, Prettier and the TypeScript compiler.
+This runs Ruff, mypy, the backend test suite (57 tests: user model, service functions, admin, browser and app authentication endpoints including CSRF enforcement, email verification, password reset, two-factor authentication with recovery codes and reauthentication, rate limiting, account linking for Google sign-in, the forwarded-host check, health endpoint, OpenAPI schema generation, management commands), ESLint, Prettier and the TypeScript compiler.
 
 The browser end-to-end tests are separate because they start the whole stack:
 
@@ -296,7 +298,7 @@ The browser end-to-end tests are separate because they start the whole stack:
 make e2e
 ```
 
-Eight Playwright tests drive a real browser through registration, email confirmation (reading the email from Mailpit), sign-in and sign-out, the unverified-account restrictions, a password reset, and two-factor authentication (setup, sign-in with an app code or a recovery code, wrong codes, turning it off). If you run them repeatedly against a server you started yourself, allauth's rate limits can trip; the servers Playwright starts have them switched off. Locally they use your installed Google Chrome. The frontend has no unit tests.
+Ten Playwright tests drive a real browser through registration, email confirmation (reading the email from Mailpit), sign-in and sign-out, the unverified-account restrictions, a password reset, signing up again with an existing address, and two-factor authentication (setup, sign-in with an app code or a recovery code, wrong codes, turning it off), plus a check that a browser extension adding attributes to `<body>` does not cause a hydration error. If you run them repeatedly against a server you started yourself, allauth's rate limits can trip; the servers Playwright starts have them switched off. Locally they use your installed Google Chrome. The frontend has no unit tests.
 
 GitHub Actions runs both sets of checks on pushes and pull requests to `main` (`.github/workflows/`): the frontend job also builds the app, the backend job runs against a PostgreSQL service and checks for missing migrations, and a separate job runs the Playwright tests with PostgreSQL and Mailpit services. Dependabot proposes weekly updates for npm, uv, GitHub Actions and Docker Compose. The workflows have been exercised locally, but have not yet run on GitHub.
 
