@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_API, BROWSER_API } from "@/lib/backend-url";
+import { AUTH_API, BACKEND_URL, BROWSER_API } from "@/lib/backend-url";
 
 type ForwardOptions = {
   /** Path under the allauth browser API, e.g. "auth/login" or "account/authenticators". */
@@ -8,6 +8,16 @@ type ForwardOptions = {
   /** Upstream statuses that mean success but should reach the browser as 200. */
   successAs200?: number[];
 };
+
+/** Proves to Django that a request came from this server (see accounts/middleware.py). */
+function proxyHeaders(req: NextRequest): Record<string, string> {
+  const secret = process.env.PROXY_SHARED_SECRET;
+  return {
+    "X-Forwarded-Host": req.headers.get("host") ?? req.nextUrl.host,
+    "X-Forwarded-Proto": req.nextUrl.protocol.replace(":", ""),
+    ...(secret && { "X-Proxy-Secret": secret }),
+  };
+}
 
 function cookieValue(setCookies: string[], name: string) {
   const match = setCookies.find((c) => c.startsWith(`${name}=`));
@@ -58,6 +68,7 @@ export async function forwardToBackend(
       Cookie: cookieHeader,
       "X-CSRFToken": csrfToken,
       Origin: origin,
+      ...proxyHeaders(req),
       ...(forwardedFor && { "X-Forwarded-For": forwardedFor }),
     },
     body: method === "POST" ? await req.text() : undefined,
@@ -72,5 +83,84 @@ export async function forwardToBackend(
     response.headers.append("set-cookie", cookie);
   }
 
+  return response;
+}
+
+/**
+ * Start a Google (or other provider) sign-in. allauth answers with a redirect to the
+ * provider; the browser has to follow it, so this returns the target as JSON, and
+ * the session cookie that holds the OAuth state goes back to the browser.
+ */
+export async function startProviderRedirect(req: NextRequest) {
+  const incoming = (await req.json()) as Record<string, string>;
+  const form = new URLSearchParams({
+    provider: incoming.provider ?? "",
+    callback_url: incoming.callback_url ?? "",
+    process: incoming.process ?? "login",
+  });
+  let cookieHeader = req.headers.get("cookie") ?? "";
+  let csrfToken = req.cookies.get("csrftoken")?.value ?? "";
+  const bootstrapCookies: string[] = [];
+  if (!csrfToken) {
+    // Same bootstrap as forwardToBackend: fetch a CSRF cookie before the POST.
+    const bootstrap = await fetch(`${AUTH_API}/session`, {
+      cache: "no-store",
+      headers: { Cookie: cookieHeader },
+    });
+    bootstrapCookies.push(...bootstrap.headers.getSetCookie());
+    csrfToken = cookieValue(bootstrapCookies, "csrftoken") ?? "";
+    cookieHeader = [cookieHeader, `csrftoken=${csrfToken}`].filter(Boolean).join("; ");
+  }
+
+  const upstream = await fetch(`${BROWSER_API}/auth/provider/redirect`, {
+    method: "POST",
+    cache: "no-store",
+    redirect: "manual",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Cookie: cookieHeader,
+      "X-CSRFToken": csrfToken,
+      Origin: req.nextUrl.origin,
+      ...proxyHeaders(req),
+    },
+    body: form.toString(),
+  });
+
+  const location = upstream.headers.get("location");
+  const response = location
+    ? NextResponse.json({ location })
+    : NextResponse.json(
+        { errors: [{ message: "Could not start Google sign-in." }] },
+        { status: 400 }
+      );
+  for (const cookie of [...bootstrapCookies, ...upstream.headers.getSetCookie()]) {
+    response.headers.append("set-cookie", cookie);
+  }
+  return response;
+}
+
+/**
+ * Relay the provider's callback to Django. Django completes the sign-in (or records
+ * an error) and answers with a redirect to our return page; cookies are passed on.
+ */
+export async function relayProviderCallback(req: NextRequest, backendPath: string) {
+  const upstream = await fetch(`${BACKEND_URL}${backendPath}${req.nextUrl.search}`, {
+    cache: "no-store",
+    redirect: "manual",
+    headers: {
+      Cookie: req.headers.get("cookie") ?? "",
+      ...proxyHeaders(req),
+    },
+  });
+
+  // Django's location is absolute; the fallback is resolved against this request.
+  const location = new URL(
+    upstream.headers.get("location") ?? "/login?error=social_failed",
+    req.nextUrl
+  );
+  const response = NextResponse.redirect(location, { status: 302 });
+  for (const cookie of upstream.headers.getSetCookie()) {
+    response.headers.append("set-cookie", cookie);
+  }
   return response;
 }

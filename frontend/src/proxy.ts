@@ -13,6 +13,8 @@ const PUBLIC_PATHS = [
   "/account/verify-email",
   "/account/password",
   "/account/two-factor",
+  "/account/social",
+  "/accounts",
   "/api",
 ];
 const AUTH_ONLY_PATHS = ["/login", "/register"];
