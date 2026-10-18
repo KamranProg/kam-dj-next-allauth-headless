@@ -38,6 +38,8 @@ make dev
 
 The template uses `127.0.0.1` and port 5433 on purpose: `localhost` can resolve to IPv6 first and reach a different server than the container.
 
+**`Error 400: redirect_uri_mismatch` from Google.** Google received a callback address other than the registered one, usually because the app was opened on another port (for example `localhost:3001`, when something else held port 3000). Stop whatever uses port 3000 and open `http://localhost:3000`. If you serve the app from another address, register `<that address>/accounts/google/login/callback/` in the OAuth client.
+
 ## Overview
 
 The project covers the part of an application that almost every product needs first: letting people register, sign in, stay signed in, and reach pages that only signed-in users can see. It uses **cookie-based sessions with CSRF protection**. No token is issued to the browser.
@@ -49,7 +51,7 @@ It is an early-stage foundation, not a finished product. There are no domain fea
 | Area | Technology | Role |
 |---|---|---|
 | Backend | Django 6.1, Django REST Framework | API and user model |
-| Backend | django-allauth (headless API) | Registration, email verification, login, logout, sessions, password reset, two-factor authentication (TOTP), rate limiting; social login is available but not enabled |
+| Backend | django-allauth (headless API) | Registration, email verification, login, logout, sessions, password reset, two-factor authentication (TOTP), rate limiting, Google sign-in |
 | Backend | drf-spectacular | OpenAPI schema, Swagger UI and ReDoc |
 | Backend | PostgreSQL 17 (Docker Compose) | Database |
 | Backend | Mailpit (Docker Compose, development only) | Local inbox that catches verification and reset emails |
@@ -71,6 +73,7 @@ Implemented:
 - Session cookie authentication with CSRF protection (`HttpOnly`, `SameSite=Lax` cookies; `Secure` outside development).
 - No API tokens for the web app: login and signup answer with the user and set cookies only. Mobile apps get a session token through the separate `app` client (see [Mobile apps](#mobile-apps)).
 - Optional two-factor authentication with an authenticator app (TOTP). Set it up on `/account/security` with a QR code; ten single-use recovery codes are created, and changing these settings after a few minutes asks for the password again. Signing in then asks for the code (or a recovery code) after the password.
+- Optional Google sign-in (see [Google sign-in](#google-sign-in)). A Google account is linked to an existing account only when both email addresses are verified; otherwise a new account is created from the verified Google address.
 - Built-in rate limiting from allauth: login, signup and password reset are limited per client IP, and repeated failed logins lock an email address for a few minutes. The UI shows a clear message when a limit is hit.
 - Custom `User` model with a UUID primary key and email as the login field.
 - Next.js proxy routes (`/api/proxy/auth/*`) that forward auth requests to Django, adding the CSRF header from the `HttpOnly` cookie and passing every cookie back to the browser.
@@ -83,7 +86,7 @@ Implemented:
 
 Present in the code but not usable yet:
 
-- Social login: the Google and Facebook buttons are placeholders that show an alert.
+- The Facebook button is a placeholder that shows an alert.
 - Password change and email management endpoints come with django-allauth's headless API and are exposed, but the frontend has no pages for them.
 - A `UserProfile` model (avatar, bio) exists but is not exposed through the API.
 
@@ -124,6 +127,20 @@ How a login works:
 2. The proxy route calls `POST /_allauth/browser/v1/auth/login` on Django, copying the `csrftoken` cookie into the `X-CSRFToken` header (client code cannot read it because it is `HttpOnly`; if the browser has none yet, the proxy fetches one first) and forwarding the `Origin` and `X-Forwarded-For` headers.
 3. Django authenticates the user and replies with `sessionid` and `csrftoken` cookies, which the proxy route passes on to the browser.
 4. The proxy guard asks Django whether the session is valid and then allows access to `/dashboard`. The client then calls `/api/auth/session` (rewritten to Django) to load the user for the navigation bar. That endpoint answers `401` while nobody is signed in.
+
+## Google sign-in
+
+The "Continue with Google" button works once you add credentials; without them it shows an error.
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), open **Google Auth Platform** and configure the consent screen (External audience; while it is in Testing mode, add your own Google account as a test user).
+2. Create an OAuth client of type **Web application** with
+   - authorized JavaScript origin `http://localhost:3000`
+   - authorized redirect URI `http://localhost:3000/accounts/google/login/callback/` (keep the trailing slash)
+3. Put the client ID and secret in `backend/backend/.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (the file is git-ignored) and restart `make dev`.
+
+How it works: the browser never talks to Django directly. The button asks the Next.js server for Google's authorization URL, Google sends the user back to the Next.js callback route, and that route hands the request to Django, which completes the sign-in and sets the session cookie. Because Django builds the redirect address from the request host, the Next.js server tells it the public host in `X-Forwarded-Host`, and Django only believes that header when it comes with `PROXY_SHARED_SECRET`, which only the Next.js server knows (`make setup` creates matching values in `backend/backend/.env` and `frontend/.env.local`). Set the same secret on both servers in production.
+
+Sign-in with Google uses the registered address exactly, so the app must run on `http://localhost:3000`. If another process holds port 3000, `make dev` stops with a message instead of moving to another port. Add your production domain to the OAuth client's origins and redirect URIs when you deploy.
 
 ## Mobile apps
 
@@ -222,6 +239,8 @@ The frontend needs no `.env.local` for local development: it defaults to the API
 | `FRONTEND_URL` | Where the frontend is served from. Used for links in verification and reset emails and as the default CSRF trusted origin. Defaults to `http://localhost:3000`. |
 | `CSRF_TRUSTED_ORIGINS` | Extra origins allowed by Django's CSRF check (comma-separated). |
 | `DISABLE_RATE_LIMITS` | Development only: set to `True` to turn allauth's rate limits off (ignored unless `DEBUG=True`). Playwright sets it for the servers it starts. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Credentials for Google sign-in (see above). Optional. |
+| `PROXY_SHARED_SECRET` | Shared secret between the Next.js server and Django (also set in `frontend/.env.local`). `make setup` generates it. |
 | `TRUSTED_PROXY_COUNT` | Number of reverse proxies in front of Django (the Next.js server counts as one), so rate limits use the real client IP. Defaults to 0. |
 | `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`, `SECURE_SSL_REDIRECT` | Default to on when `DEBUG` is off. |
 | `SECURE_HSTS_SECONDS` | Defaults to 3600 when `DEBUG` is off. Raise it once HTTPS works. |
@@ -269,7 +288,7 @@ The frontend needs no `.env.local` for local development: it defaults to the API
 make check
 ```
 
-This runs Ruff, mypy, the backend test suite (45 tests: user model, service functions, admin, browser and app authentication endpoints including CSRF enforcement, email verification, password reset, two-factor authentication with recovery codes and reauthentication, rate limiting, health endpoint, OpenAPI schema generation, management commands), ESLint, Prettier and the TypeScript compiler.
+This runs Ruff, mypy, the backend test suite (54 tests: user model, service functions, admin, browser and app authentication endpoints including CSRF enforcement, email verification, password reset, two-factor authentication with recovery codes and reauthentication, rate limiting, account linking for Google sign-in, the forwarded-host check, health endpoint, OpenAPI schema generation, management commands), ESLint, Prettier and the TypeScript compiler.
 
 The browser end-to-end tests are separate because they start the whole stack:
 
@@ -287,6 +306,8 @@ In place:
 
 - Session cookies are `HttpOnly` and `SameSite=Lax`; with `DEBUG=False` they are also `Secure`, HTTPS redirect and HSTS are enabled, and `manage.py check --deploy` reports only the optional HSTS subdomain/preload settings.
 - Two-factor authentication (TOTP) is available to every account, but it is optional; nothing forces users to turn it on.
+- Google accounts are linked to existing accounts only when both addresses are verified, and new accounts are only created from a verified Google address.
+- Django ignores `X-Forwarded-Host` unless the request carries the shared `PROXY_SHARED_SECRET`, so a client cannot choose the host Django builds URLs from.
 - CSRF protection is enforced for authenticated writes; the CSRF cookie is `HttpOnly` and handled server-side by the Next.js proxy routes.
 - No API tokens are issued, and the dashboard does not expose the session cookie.
 - The browser never calls Django cross-origin, so no CORS configuration is needed.
@@ -305,7 +326,7 @@ Early-stage prototype. The authentication flow works end to end, but the project
 Known limitations:
 
 - No frontend unit tests. The Playwright tests cover the main authentication flows only.
-- Social login and a profile page are not implemented (see [Features](#features)). Two-factor authentication is only wired up for the web app; the mobile `app` client flow for it has not been tried.
+- A profile page and Facebook sign-in are not implemented, and Google sign-in has no automated end-to-end test (it needs a real Google account); the linking rules are unit tested (see [Features](#features)). Two-factor authentication is only wired up for the web app; the mobile `app` client flow for it has not been tried.
 - Settings are development-oriented beyond the security defaults above: console email backend (Django 6.1 deprecates `EMAIL_BACKEND` in favour of `MAILERS`, removal planned for Django 2028), no media or static file configuration, and no deployment setup.
 
 ## License
