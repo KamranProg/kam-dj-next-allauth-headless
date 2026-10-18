@@ -1,22 +1,40 @@
 BACKEND_ENV := backend/backend/.env
+FRONTEND_ENV := frontend/.env.local
 COMPOSE := docker compose --env-file $(BACKEND_ENV)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup deps env-check db migrate seed dev backend frontend test e2e check lint down reset-db
+.PHONY: help setup deps env-check check-ports db migrate seed dev backend frontend test e2e check lint down reset-db
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
 
-setup: $(BACKEND_ENV) env-check deps ## Create the backend .env and install both apps' dependencies
+setup: $(BACKEND_ENV) $(FRONTEND_ENV) env-check deps ## Create the backend .env and install both apps' dependencies
 
 $(BACKEND_ENV):
 	cp backend/backend/.env.example $@
 	sed -i.bak "s|^SECRET_KEY=.*|SECRET_KEY=$$(python3 -c 'import secrets; print(secrets.token_urlsafe(50))')|" $@ && rm -f $@.bak
-	@echo "Created $@ with a fresh SECRET_KEY"
+	sed -i.bak "s|^# PROXY_SHARED_SECRET=.*|PROXY_SHARED_SECRET=$$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')|" $@ && rm -f $@.bak
+	@echo "Created $@ with a fresh SECRET_KEY and PROXY_SHARED_SECRET"
+
+# The Next.js server needs the same PROXY_SHARED_SECRET as Django (see accounts/middleware.py).
+$(FRONTEND_ENV): $(BACKEND_ENV)
+	grep '^PROXY_SHARED_SECRET=' $(BACKEND_ENV) > $@
+	@echo "Created $@ with the matching PROXY_SHARED_SECRET"
 
 deps:
 	cd backend && uv sync
 	cd frontend && pnpm install --frozen-lockfile
+
+# Google sign-in only accepts the registered address, so the apps must get ports 3000 and 8000.
+check-ports:
+	@command -v lsof >/dev/null 2>&1 || exit 0; \
+	for port in 3000 8000; do \
+		if lsof -nP -iTCP:$$port -sTCP:LISTEN >/dev/null 2>&1; then \
+			echo "Port $$port is already in use, so the app would not start where Google sign-in expects it."; \
+			echo "Stop the other server first. See what is using it with: lsof -nP -iTCP:$$port -sTCP:LISTEN"; \
+			exit 1; \
+		fi; \
+	done
 
 env-check:
 	@if grep -qE '^(POSTGRES_PORT=5432|POSTGRES_DB=kbackend_db|POSTGRES_HOST=localhost)' $(BACKEND_ENV) 2>/dev/null; then \
@@ -36,7 +54,7 @@ migrate: ## Apply database migrations
 seed: ## Create the demo user (demo@example.com), development only
 	cd backend && uv run python backend/manage.py seed_demo
 
-dev: db migrate seed ## Run everything: database, API on :8000, web app on :3000
+dev: check-ports db migrate seed ## Run everything: database, API on :8000, web app on :3000
 	$(MAKE) -j2 backend frontend
 
 backend: ## Run only the Django API on :8000
