@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -46,6 +46,7 @@ async function loginViaProxy(values: LoginFormValues): Promise<ApiResponseStatus
       return {
         status: "error",
         message: responseMessage(res.status, data, "Login failed"),
+        wrongCredentials: res.status === 400,
       };
     }
 
@@ -66,6 +67,8 @@ export function LoginForm() {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const { refreshUser } = useAuth();
+  // Shown after a rejected password. It never says whether the email has an account.
+  const [showProviderHint, setShowProviderHint] = useState(false);
 
   const form = useAppForm({
     defaultValues: {
@@ -80,8 +83,10 @@ export function LoginForm() {
       startTransition(async () => {
         const result = await loginViaProxy(value);
 
+        setShowProviderHint(false);
         if (result.status === "error") {
           toast.error(result.message);
+          if (result.wrongCredentials) setShowProviderHint(true);
           if (result.next) router.push(result.next);
           return;
         }
@@ -125,6 +130,16 @@ export function LoginForm() {
             <form.SubmitButton isPending={isPending}>Sign in</form.SubmitButton>
           </form.AppForm>
         </form>
+        {showProviderHint && (
+          <p role="status" className="mt-4 text-sm text-muted-foreground">
+            Signed up with Google? Use <strong>Continue with Google</strong> below. To sign in with
+            a password as well,{" "}
+            <Link href="/account/password/reset" className="text-blue-600 hover:underline">
+              set one with a password reset
+            </Link>
+            .
+          </p>
+        )}
       </CardContent>
 
       <CardFooter className="flex flex-col gap-4">

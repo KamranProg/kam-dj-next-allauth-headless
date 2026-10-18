@@ -60,8 +60,27 @@ test("reset a forgotten password", async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard/);
 });
 
-test("a wrong password shows the server's error", async ({ page }) => {
+test("a wrong password shows the server's error and a hint for Google accounts", async ({
+  page,
+}) => {
   await signIn(page, uniqueEmail(), "whatever1");
   await expect(page.getByText("not correct")).toBeVisible();
+  await expect(page.getByText("Signed up with Google?")).toBeVisible();
   await expect(page).toHaveURL(/\/login/);
+});
+
+test("signing up again with an existing address looks like a new sign-up", async ({ page }) => {
+  const email = uniqueEmail();
+  await register(page, email);
+  await confirmEmail(page, email);
+
+  // Same page and wording as a brand new sign-up, so addresses cannot be probed.
+  // (The "account already exists" email is rate-limited per address and is covered by a
+  // backend test; here the address just received a confirmation email.)
+  await register(page, email);
+  await expect(page.getByText("If you already have an account with this address")).toBeVisible();
+
+  // There is nothing to confirm, so resending says so instead of failing vaguely.
+  await page.getByRole("button", { name: "Send the email again" }).click();
+  await expect(page.getByText("There is no confirmation email to resend")).toBeVisible();
 });
