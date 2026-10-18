@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/context/auth-context";
 import { callProxy, postAuth, type ApiCallResult } from "@/lib/auth-client";
 import { flowIds } from "@/lib/api-errors";
 
@@ -27,7 +28,9 @@ function readCodes(res: ApiCallResult): string[] {
 }
 
 export default function SecurityPage() {
+  const { user } = useAuth();
   const [loaded, setLoaded] = useState(false);
+  const [passwordLinkSent, setPasswordLinkSent] = useState(false);
   const [totpOn, setTotpOn] = useState(false);
   const [unused, setUnused] = useState(0);
   const [setup, setSetup] = useState<Setup | null>(null);
@@ -133,6 +136,17 @@ export default function SecurityPage() {
     setBusy(false);
   }
 
+  // Accounts created through Google have no password. Setting one needs the mailbox, not just
+  // a signed-in session, so it goes through the emailed reset link rather than an in-page form.
+  async function emailPasswordLink() {
+    if (!user) return;
+    setBusy(true);
+    const res = await postAuth("password/request", { email: user.email });
+    setBusy(false);
+    if (res.ok) setPasswordLinkSent(true);
+    else toast.error(res.message);
+  }
+
   async function confirmPassword() {
     if (!reauth) return;
     setBusy(true);
@@ -170,6 +184,32 @@ export default function SecurityPage() {
             <Button onClick={confirmPassword} disabled={busy || !password}>
               Confirm password
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {user?.hasPassword === false && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Password</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {passwordLinkSent ? (
+              <p>
+                We sent a link to <strong>{user.email}</strong>. Open it to choose a password; you
+                can then sign in with it as well as with Google.
+              </p>
+            ) : (
+              <>
+                <p>
+                  You signed in with Google, so this account has no password yet. To also sign in
+                  with an email and password, we will email you a link to choose one.
+                </p>
+                <Button onClick={emailPasswordLink} disabled={busy}>
+                  Email me a link to set a password
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       )}

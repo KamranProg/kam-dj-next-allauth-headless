@@ -2,6 +2,8 @@ export type SessionUser = {
   id: string;
   email: string;
   username?: string;
+  /** False for accounts created through Google until a password is set. */
+  hasPassword?: boolean;
 };
 
 export async function getUserClient(): Promise<SessionUser | null> {
@@ -17,7 +19,12 @@ export async function getUserClient(): Promise<SessionUser | null> {
 
     const user = (await res.json())?.data?.user;
     if (!user) return null;
-    return { id: String(user.id), email: user.email, username: user.username };
+    return {
+      id: String(user.id),
+      email: user.email,
+      username: user.username,
+      hasPassword: user.has_usable_password,
+    };
   } catch {
     return null;
   }

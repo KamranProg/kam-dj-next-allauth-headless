@@ -1,13 +1,9 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { getUserClient } from "@/data/user/get-user-client";
+import { getUserClient, type SessionUser } from "@/data/user/get-user-client";
 
-type User = {
-  id: string;
-  email: string;
-  username?: string;
-};
+type User = SessionUser;
 
 type AuthContextType = {
   user: User | null;
