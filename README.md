@@ -38,7 +38,7 @@ make dev
 
 The template uses `127.0.0.1` and port 5433 on purpose: `localhost` can resolve to IPv6 first and reach a different server than the container.
 
-**I signed up with Google and cannot sign in (or sign up) with a password.** An account created through Google has no password, so a password sign-in is rejected. Signing up again with the same address gives the same "Check your email" page as any new sign-up (so addresses cannot be probed) and emails the owner an "account already exists" message with a recovery link. To use a password as well, choose **Forgot your password?** on the sign-in page and set one; Google sign-in keeps working. (The "account already exists" email is rate-limited per address, so a second one within a few minutes is not sent.)
+**I signed up with Google and cannot sign in (or sign up) with a password.** An account created through Google has no password, so a password sign-in is rejected. Signing up again with the same address gives the same "Check your email" page as any new sign-up (so addresses cannot be probed) and emails the owner an "account already exists" message with a recovery link. To use a password as well, open **Security** and choose **Email me a link to set a password** (or **Forgot your password?** on the sign-in page) and set one; Google sign-in keeps working. (The "account already exists" email is rate-limited per address, so a second one within a few minutes is not sent.)
 
 **`Error 400: redirect_uri_mismatch` from Google.** Google received a callback address other than the registered one, usually because the app was opened on another port (for example `localhost:3001`, when something else held port 3000). Stop whatever uses port 3000 and open `http://localhost:3000`. If you serve the app from another address, register `<that address>/accounts/google/login/callback/` in the OAuth client.
 
@@ -76,6 +76,7 @@ Implemented:
 - No API tokens for the web app: login and signup answer with the user and set cookies only. Mobile apps get a session token through the separate `app` client (see [Mobile apps](#mobile-apps)).
 - Optional two-factor authentication with an authenticator app (TOTP). Set it up on `/account/security` with a QR code; ten single-use recovery codes are created, and changing these settings after a few minutes asks for the password again. Signing in then asks for the code (or a recovery code) after the password.
 - Optional Google sign-in (see [Google sign-in](#google-sign-in)). A Google account is linked to an existing account only when both email addresses are verified; otherwise a new account is created from the verified Google address.
+- Accounts created through Google have no password. The Security page offers them "Email me a link to set a password", which uses the same emailed reset link as "Forgot your password?". It deliberately does not offer an in-page form: setting a first password without confirming the mailbox would let anyone holding a signed-in session (for example on a shared computer) take the account over permanently.
 - Built-in rate limiting from allauth: login, signup and password reset are limited per client IP, and repeated failed logins lock an email address for a few minutes. The UI shows a clear message when a limit is hit.
 - Custom `User` model with a UUID primary key and email as the login field.
 - Next.js proxy routes (`/api/proxy/auth/*`) that forward auth requests to Django, adding the CSRF header from the `HttpOnly` cookie and passing every cookie back to the browser.
@@ -290,7 +291,7 @@ The frontend needs no `.env.local` for local development: it defaults to the API
 make check
 ```
 
-This runs Ruff, mypy, the backend test suite (57 tests: user model, service functions, admin, browser and app authentication endpoints including CSRF enforcement, email verification, password reset, two-factor authentication with recovery codes and reauthentication, rate limiting, account linking for Google sign-in, the forwarded-host check, health endpoint, OpenAPI schema generation, management commands), ESLint, Prettier and the TypeScript compiler.
+This runs Ruff, mypy, the backend test suite (58 tests: user model, service functions, admin, browser and app authentication endpoints including CSRF enforcement, email verification, password reset, two-factor authentication with recovery codes and reauthentication, rate limiting, account linking for Google sign-in, the forwarded-host check, health endpoint, OpenAPI schema generation, management commands), ESLint, Prettier and the TypeScript compiler.
 
 The browser end-to-end tests are separate because they start the whole stack:
 
