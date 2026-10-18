@@ -169,6 +169,16 @@ class TestGoogleOnlyAccount:
         )
         assert response.status_code == HTTPStatus.OK
 
+    def test_session_reports_that_no_password_is_set(
+        self,
+        client: APIClient,
+        google_user: User,
+    ) -> None:
+        """Tells the frontend the account has no password, so it can offer to set one."""
+        client.force_login(google_user)
+        user = client.get(f"{BROWSER}/session").json()["data"]["user"]
+        assert user["has_usable_password"] is False
+
     def test_signing_up_again_sends_the_account_exists_email(
         self,
         google_user: User,
